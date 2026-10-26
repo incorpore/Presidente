@@ -48,7 +48,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data web/dados
+          git add data; [ -d web/dados ] && git add web/dados
           git diff --cached --quiet && { echo "sem mudanças"; exit 0; }
           git commit -m "dados: resultados oficiais TSE e malhas IBGE"
           git push
