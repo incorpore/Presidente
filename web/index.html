@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Presidente 2026 em Dados</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Resultados oficiais do TSE para Presidente em 2026, 1º e 2º turno, por município, estado e região, com comparação entre turnos.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!--CORPO-->
+<header class="topo">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Eleição presidencial · dados oficiais do TSE</div>
+      <h1>Presidente 2026 em Dados</h1>
+      <p class="fonte" id="fonte">Carregando os resultados oficiais…</p>
+    </div>
+    <div class="seg" role="group" aria-label="Turno" id="turnos">
+      <button type="button" data-t="t1" aria-pressed="false">1º turno</button>
+      <button type="button" data-t="t2" aria-pressed="true">2º turno</button>
+      <button type="button" data-t="cmp" aria-pressed="false">Comparar turnos</button>
+    </div>
+  </div>
+</header>
+
+<nav class="local" aria-label="Local">
+  <div class="wrap">
+    <div class="migalha" id="migalha"></div>
+    <div class="filtros">
+      <select id="sel-rg" aria-label="Região"></select>
+      <select id="sel-uf" aria-label="Estado"></select>
+      <input id="busca" type="search" list="lista-mun" placeholder="Buscar município…" aria-label="Buscar município" autocomplete="off">
+      <datalist id="lista-mun"></datalist>
+    </div>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap" id="app">
+    <div class="carregando" id="carregando">Carregando os resultados oficiais…</div>
+
+    <section class="bloco" id="resultado" hidden>
+      <div class="bloco-cab">
+        <h2 id="res-titulo">Resultado</h2>
+        <span class="eyebrow" id="res-status"></span>
+      </div>
+      <p class="lead" id="res-lead"></p>
+      <div class="cands" id="res-cands"></div>
+      <div class="kpis" id="res-kpis"></div>
+    </section>
+
+    <section class="bloco" id="mapa" hidden>
+      <div class="bloco-cab">
+        <h2>Mapa por município</h2>
+        <div class="controles">
+          <label for="sel-metrica">Mostrar</label>
+          <select id="sel-metrica"></select>
+        </div>
+      </div>
+      <p class="small muted" id="metrica-desc"></p>
+      <div class="mapa-grid">
+        <div class="mapa-box">
+          <canvas id="cv-mapa" aria-label="Mapa dos municípios" role="img"></canvas>
+          <div class="legenda" id="legenda"></div>
+        </div>
+        <div class="fig">
+          <h3 id="rank-titulo">Ranking</h3>
+          <div class="ranking" id="ranking"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bloco" id="analise" hidden>
+      <div class="bloco-cab">
+        <h2>Do 1º para o 2º turno</h2>
+        <p>De onde vieram os votos que decidiram o 2º turno, e onde o resultado fugiu do padrão.</p>
+      </div>
+      <div class="caixa">
+        <h3>Para onde foi cada eleitor</h3>
+        <p class="small muted">Cada barra é o eleitorado inteiro. Compare o tamanho de cada pedaço entre os dois turnos.</p>
+        <div class="ponte" id="ponte"></div>
+        <p class="lead small" id="ponte-texto"></p>
+      </div>
+      <div class="grid2">
+        <figure class="fig" id="fig-disp1">
+          <h3 id="disp1-titulo">1º turno × 2º turno</h3>
+          <canvas id="cv-disp1"></canvas>
+          <figcaption id="disp1-cap"></figcaption>
+        </figure>
+        <figure class="fig" id="fig-disp2">
+          <h3 id="disp2-titulo">Votos dos eliminados × crescimento</h3>
+          <canvas id="cv-disp2"></canvas>
+          <figcaption id="disp2-cap"></figcaption>
+        </figure>
+      </div>
+      <div class="caixa">
+        <h3>Como encontramos resultados fora do padrão</h3>
+        <p class="small" id="modelo-texto"></p>
+      </div>
+      <div class="fig">
+        <div class="bloco-cab">
+          <h3 id="atip-titulo">Municípios fora do padrão</h3>
+          <div class="controles">
+            <label for="sel-atip">Ordenar por</label>
+            <select id="sel-atip">
+              <option value="votos">Mais votos fora do esperado</option>
+              <option value="z">Mais improvável (desvios)</option>
+              <option value="abst+">Maior alta da abstenção</option>
+              <option value="abst-">Maior queda da abstenção</option>
+              <option value="virada">Viradas (líder mudou)</option>
+            </select>
+          </div>
+        </div>
+        <div class="tabela-wrap"><table id="tab-atip"></table></div>
+      </div>
+    </section>
+
+    <section class="bloco" id="tabela" hidden>
+      <div class="bloco-cab">
+        <h2 id="tab-titulo">Todos os locais</h2>
+        <input id="tab-busca" type="search" placeholder="Filtrar pelo nome…" aria-label="Filtrar tabela" class="filtro-tab">
+      </div>
+      <div class="tabela-wrap"><table id="tab-locais"></table></div>
+      <p class="small muted">Clique em uma linha para abrir aquele local. Clique no título de uma coluna para ordenar.</p>
+    </section>
+
+    <section class="bloco" id="glossario" hidden>
+      <h2>Como ler estes números</h2>
+      <dl class="glossario">
+        <div><dt>Eleitorado</dt><dd>Pessoas aptas a votar naquele local.</dd></div>
+        <div><dt>Comparecimento</dt><dd>Quem foi votar. A diferença para o eleitorado é a abstenção.</dd></div>
+        <div><dt>Votos válidos</dt><dd>Votos dados a um candidato. Brancos e nulos ficam de fora, e o percentual oficial de cada candidato é calculado só sobre os válidos.</dd></div>
+        <div><dt>Brancos e nulos</dt><dd>Votos que não vão para nenhum candidato. Não decidem a eleição nem favorecem ninguém.</dd></div>
+        <div><dt>Ponto percentual (p.p.)</dt><dd>Diferença entre dois percentuais. De 40% para 45% são 5 p.p.</dd></div>
+        <div><dt>Virada</dt><dd>Município onde quem liderou no 1º turno não venceu no 2º.</dd></div>
+      </dl>
+      <div class="notas" id="notas"></div>
+    </section>
+  </div>
+</main>
+<div class="tip" id="tip" hidden></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="app.js"></script>
+<!--/CORPO-->
+</body>
+</html>

@@ -101,7 +101,7 @@ def fetch_turno(ano, cd):
 
     def one(job):
         uf, m = job
-        url = f"{BASE}/ele{ano}/{cd}/dados-simplificados/{uf}/{uf}{m['cd']}-c{CARGO}-e{e6}-r.json"
+        url = f"{BASE}/ele{ano}/{cd}/dados/{uf}/{uf}{m['cd']}-c{CARGO}-e{e6}-u.json"
         try:
             return job, get_json(url)
         except urllib.error.HTTPError as e:
@@ -114,13 +114,13 @@ def fetch_turno(ano, cd):
             if k % 500 == 0:
                 print(f"  e{e6}: {k}/{len(jobs)} municípios", flush=True)
 
-    br = get_json(f"{BASE}/ele{ano}/{cd}/dados-simplificados/br/br-c{CARGO}-e{e6}-r.json")
-    save_raw(f"br-c{CARGO}-e{e6}-r.json", br)
+    br = get_json(f"{BASE}/ele{ano}/{cd}/dados/br/br-c{CARGO}-e{e6}-u.json")
+    save_raw(f"br-c{CARGO}-e{e6}-u.json", br)
     ufs = {}
     for abr in mun_cfg["abr"]:
         uf = abr["cd"].lower()
         try:
-            ufs[uf.upper()] = get_json(f"{BASE}/ele{ano}/{cd}/dados-simplificados/{uf}/{uf}-c{CARGO}-e{e6}-r.json")
+            ufs[uf.upper()] = get_json(f"{BASE}/ele{ano}/{cd}/dados/{uf}/{uf}-c{CARGO}-e{e6}-u.json")
         except urllib.error.HTTPError:
             pass
     if out:
@@ -129,16 +129,17 @@ def fetch_turno(ano, cd):
 
 
 def resumo(r):
-    """Campos agregados de um arquivo -r.json do TSE."""
+    """Campos agregados de um arquivo -u.json do TSE."""
+    e, v, se = r.get("e", {}), r.get("v", {}), r.get("s", {})
     return {
-        "e": to_int(r.get("e")),      # eleitorado apto
-        "c": to_int(r.get("c")),      # comparecimento
-        "a": to_int(r.get("a")),      # abstenções
-        "vv": to_int(r.get("vv") or r.get("vvc")),  # votos válidos
-        "vb": to_int(r.get("vb")),    # brancos
-        "vn": to_int(r.get("tvn") or r.get("vn")),  # nulos (total)
-        "s": to_int(r.get("s")),      # seções
-        "st": to_int(r.get("st")),    # seções totalizadas
+        "e": to_int(e.get("te")),     # eleitorado apto
+        "c": to_int(e.get("c")),      # comparecimento
+        "a": to_int(e.get("a")),      # abstenções
+        "vv": to_int(v.get("vv")),    # votos válidos
+        "vb": to_int(v.get("vb")),    # brancos
+        "vn": to_int(v.get("tvn")),   # nulos (total, inclui anulados)
+        "s": to_int(se.get("ts")),    # seções
+        "st": to_int(se.get("st")),   # seções totalizadas
         "md": r.get("md"),            # status de divulgação
         "dg": r.get("dg"), "hg": r.get("hg"),  # data/hora da totalização
     }
@@ -146,11 +147,15 @@ def resumo(r):
 
 def candidatos(r):
     out = []
-    for c in r.get("cand", []):
-        out.append({
-            "n": c.get("n"), "nm": c.get("nm"), "cc": c.get("cc"),
-            "e": c.get("e"), "st": c.get("st"), "v": to_int(c.get("vap")),
-        })
+    for cg in r.get("carg", []):
+        for ag in cg.get("agr", []):
+            for par in ag.get("par", []):
+                for c in par.get("cand", []):
+                    out.append({
+                        "n": c.get("n"), "nm": c.get("nmu") or c.get("nm"), "nc": c.get("nm"),
+                        "cc": f"{par.get('sg', '')} - {ag.get('nm', '')}".strip(" -"),
+                        "e": c.get("e"), "st": c.get("st"), "dvt": c.get("dvt"), "v": to_int(c.get("vap")),
+                    })
     return out
 
 
