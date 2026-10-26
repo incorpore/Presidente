@@ -40,9 +40,10 @@ REGIAO = {
 }
 
 
-def get_json(url, tries=6):
+def get_json(url, tries=10):
     last = None
     for i in range(tries):
+        espera = min(2 ** i, 60)
         try:
             req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
             with urllib.request.urlopen(req, timeout=60) as r:
@@ -51,9 +52,11 @@ def get_json(url, tries=6):
             last = e
             if e.code == 404:
                 raise
+            if e.code == 429:  # limite de requisições do TSE: espera mais
+                espera = max(espera, int(e.headers.get("Retry-After") or 0), 15)
         except Exception as e:  # rede instável: tenta de novo
             last = e
-        time.sleep(min(2 ** i, 30))
+        time.sleep(espera)
     raise RuntimeError(f"falha ao baixar {url}: {last}")
 
 
@@ -106,14 +109,22 @@ def fetch_turno(ano, cd):
             return job, get_json(url)
         except urllib.error.HTTPError as e:
             return job, {"_erro": e.code}
+        except RuntimeError as e:
+            return job, {"_erro": str(e)}
 
     out = []
-    with cf.ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "24"))) as ex:
+    with cf.ThreadPoolExecutor(max_workers=int(os.environ.get("WORKERS", "6"))) as ex:
         for k, (job, data) in enumerate(ex.map(one, jobs), 1):
             out.append((job, data))
             if k % 500 == 0:
                 print(f"  e{e6}: {k}/{len(jobs)} municípios", flush=True)
 
+    falhas = [i for i, (_, d) in enumerate(out) if "_erro" in d and d["_erro"] != 404]
+    if falhas:
+        print(f"  repetindo {len(falhas)} municípios que falharam", flush=True)
+        time.sleep(30)
+        for i in falhas:
+            out[i] = one(out[i][0])
     br = get_json(f"{BASE}/ele{ano}/{cd}/dados/br/br-c{CARGO}-e{e6}-u.json")
     save_raw(f"br-c{CARGO}-e{e6}-u.json", br)
     ufs = {}
