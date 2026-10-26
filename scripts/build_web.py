@@ -82,8 +82,14 @@ def main():
 
     totais = {t: {uf: {k: v for k, v in x.items() if k in CAMPOS or k == "cand"}
                   for uf, x in d["totais"][t].items()} for t in turnos}
+    # municípios ainda sem todas as seções totalizadas no momento da coleta
+    incompletos = [{"t": t, "nm": m["nm"], "uf": m["uf"], "s": m[t].get("s"), "st": m[t].get("st")}
+                   for m in d["municipios"] for t in turnos
+                   if m.get(t) and m[t].get("s") and m[t].get("st") != m[t].get("s")]
+    for x in incompletos:
+        print(f"  incompleto {x['t']} {x['nm']} ({x['uf']}): {x['st']} de {x['s']} seções")
     painel = {"meta": d["meta"], "cand": cand, "fin": fin, "uf": UF_NOME,
-              "totais": totais, "conferencia": difs, "cols": cols, "rows": rows}
+              "totais": totais, "conferencia": difs, "incompletos": incompletos, "cols": cols, "rows": rows}
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "painel.json"), "w", encoding="utf-8") as f:
         json.dump(painel, f, ensure_ascii=False, separators=(",", ":"))

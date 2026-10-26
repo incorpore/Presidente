@@ -217,6 +217,10 @@ def main():
                 continue
             mun[tk] = resumo(r) | {"cand": {c["n"]: c["v"] for c in candidatos(r)}}
         print(f"  {tk}: {len(rows)} municípios, {erros} sem dados", flush=True)
+        for mun in municipios.values():
+            x = mun.get(tk)
+            if x and x["s"] and x["st"] != x["s"]:
+                print(f"  aviso: {mun['nm']} ({mun['uf']}) com {x['st']} de {x['s']} seções totalizadas", flush=True)
 
     out = {"meta": meta, "candidatos": cands, "totais": totais,
            "municipios": sorted(municipios.values(), key=lambda m: (m["uf"], m["nm"] or ""))}

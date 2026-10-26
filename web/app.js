@@ -747,10 +747,12 @@
 
   function conferencia() {
     const difs = (D.conferencia || []).filter((d) => d.campo === "vv");
-    if (!difs.length) return el("p", {}, "Conferência: a soma dos municípios bate exatamente com o total oficial do Brasil e de cada estado, nos dois turnos.");
-    return el("p", {}, "Conferência: a soma dos municípios bate com o total oficial, com uma exceção pequena. ",
-      ...difs.filter((d) => d.local !== "BR").map((d) => `No ${d.t === "t1" ? "1º" : "2º"} turno, em ${D.uf[d.local] || d.local}, o total oficial do estado tem ${fmt(Math.abs(d.oficial - d.soma))} votos válidos ${d.oficial > d.soma ? "a mais" : "a menos"} do que a soma dos arquivos dos municípios (${fmt(d.oficial)} contra ${fmt(d.soma)}). `),
-      "O arquivo oficial do estado foi gerado depois dos arquivos das cidades, então a diferença provavelmente vem de seções atualizadas nesse intervalo. É menos de 0,01% dos votos e não muda o resultado. O painel mostra os números de cada município como o TSE os publicou.");
+    const inc = D.incompletos || [];
+    if (!difs.length && !inc.length) return el("p", {}, "Conferência: a soma dos municípios bate exatamente com o total oficial do Brasil e de cada estado, nos dois turnos, e todas as seções estavam totalizadas.");
+    return el("p", {}, "Conferência: ",
+      ...inc.map((x) => `no ${x.t === "t1" ? "1º" : "2º"} turno, ${titulo(x.nm)} (${x.uf}) ainda tinha ${x.st} de ${x.s} seções totalizadas quando os dados foram coletados; os números dessa cidade estão incompletos e serão corrigidos na próxima atualização. `),
+      ...difs.filter((d) => d.local !== "BR").map((d) => `A soma dos municípios de ${D.uf[d.local] || d.local} no ${d.t === "t1" ? "1º" : "2º"} turno difere do total oficial do estado em ${fmt(Math.abs(d.oficial - d.soma))} votos válidos. `),
+      "Diferenças assim vêm de arquivos coletados em momentos diferentes e não mudam o resultado.");
   }
 
   // ---------- início ----------
