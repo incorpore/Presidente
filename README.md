@@ -29,7 +29,14 @@ python3 -m http.server -d web 8000
 # abra http://localhost:8000
 ```
 
-Também funciona no GitHub Pages apontando para a pasta `web/`.
+### No GitHub Pages
+
+O workflow **Publicar painel (GitHub Pages)** (`.github/workflows/pages.yml`)
+publica a pasta `web/` em <https://incorpore.github.io/Presidente/> a cada
+mudança no painel e sempre que os dados do TSE são atualizados.
+
+Na primeira vez, ative o Pages em **Settings → Pages → Build and deployment →
+Source: GitHub Actions** e rode o workflow pela aba *Actions*.
 
 ## De onde vêm os dados
 

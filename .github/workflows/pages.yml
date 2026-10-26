@@ -1,0 +1,46 @@
+name: Publicar painel (GitHub Pages)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ccr-5e5cae21-7j2iys]
+    paths:
+      - "web/**"
+      - ".github/workflows/pages.yml"
+  # os commits de dados feitos pelo workflow do TSE não disparam "push",
+  # então publicamos de novo quando ele termina
+  workflow_run:
+    workflows: ["Atualizar dados do TSE"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ccr-5e5cae21-7j2iys
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
