@@ -1,0 +1,51 @@
+name: Atualizar dados do TSE
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/**"
+      - ".github/workflows/dados.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dados-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resultados oficiais (TSE)
+        run: python3 scripts/fetch_tse.py --ano 2026
+
+      - name: Malhas municipais e estaduais (IBGE)
+        continue-on-error: true
+        run: |
+          mkdir -p data/geo
+          curl -fsSL --retry 5 -o data/geo/municipios.json \
+            "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo%2Bjson&qualidade=minima&intrarregiao=municipio"
+          curl -fsSL --retry 5 -o data/geo/ufs.json \
+            "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo%2Bjson&qualidade=minima&intrarregiao=UF"
+          curl -fsSL --retry 5 -o data/geo/ibge_municipios.json \
+            "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
+          ls -la data/geo
+
+      - name: Gravar no repositório
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && { echo "sem mudanças"; exit 0; }
+          git commit -m "dados: resultados oficiais TSE e malhas IBGE"
+          git push
