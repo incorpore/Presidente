@@ -25,6 +25,10 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Diagnóstico da API do TSE
+        continue-on-error: true
+        run: python3 scripts/probe_tse.py 6257 6258 | grep -E '^OK' || true
+
       - name: Resultados oficiais (TSE)
         run: python3 scripts/fetch_tse.py --ano 2026
 

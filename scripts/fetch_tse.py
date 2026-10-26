@@ -194,7 +194,7 @@ def main():
             key = uf.upper() + m["cd"]
             mun = municipios.setdefault(key, {
                 "uf": uf.upper(), "tse": m["cd"], "ibge": m.get("cdi"), "nm": m.get("nm"),
-                "cap": m.get("c") == "S", "rg": REGIAO.get(uf.upper(), "?"),
+                "cap": str(m.get("c", "")).lower() == "s", "rg": REGIAO.get(uf.upper(), "?"),
             })
             if "_erro" in r:
                 erros += 1
