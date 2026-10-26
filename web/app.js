@@ -103,6 +103,7 @@
     }
     for (const m of lista) if (m.mod) { out.res += m.mod.rv; out.resVV += m.t2.vv; }
     out.viradas = lista.filter((m) => m.mod && m.mod.virada).length;
+    out.atip = lista.filter((m) => m.mod && Math.abs(m.mod.z) > 3).length;
     return out;
   }
 
@@ -186,11 +187,18 @@
     if (esc.tipo === "rg") return Object.keys(REGIAO).filter((u) => REGIAO[u] === esc.id)
       .map((u) => ({ esc: { tipo: "uf", id: u }, nome: D.uf[u] || u, sigla: u }));
     const uf = esc.tipo === "uf" ? esc.id : POR_ID.get(esc.id).uf;
-    return MUN.filter((m) => m.uf === uf).map((m) => ({ esc: { tipo: "mun", id: m.id }, nome: m.nome, sigla: m.uf, m }));
+    return MUN.filter((m) => m.uf === uf && votou(m)).map((m) => ({ esc: { tipo: "mun", id: m.id }, nome: m.nome, sigla: m.uf, m }));
+  }
+  // cidades (só no exterior) sem nenhuma seção com votos no turno em análise
+  const votou = (m) => (S.turno === "cmp" ? m.t1 && m.t2 && m.t1.c > 0 && m.t2.c > 0 : m[tDe()] && m[tDe()].c > 0);
+  function semVotacao(esc) {
+    if (esc.tipo === "mun") return "";
+    const n = listaDe(esc).filter((m) => !votou(m)).length;
+    return n ? `${fmt(n)} cidade${n > 1 ? "s" : ""} do exterior sem votação neste turno fica${n > 1 ? "m" : ""} de fora da lista.` : "";
   }
   function pai(esc) {
     if (esc.tipo === "mun") return { tipo: "uf", id: POR_ID.get(esc.id).uf };
-    if (esc.tipo === "uf") return { tipo: "rg", id: REGIAO[esc.id] };
+    if (esc.tipo === "uf") return esc.id === "ZZ" ? { tipo: "br", id: "BR" } : { tipo: "rg", id: REGIAO[esc.id] };
     return { tipo: "br", id: "BR" };
   }
   const tDe = () => (S.turno === "t1" ? "t1" : TEM_T2 ? "t2" : "t1");
@@ -205,9 +213,16 @@
         { id: "dB", nome: `Variação de ${CAND[B].nome} (p.p.)`, desc: `Quanto a fatia de ${CAND[B].nome} nos votos válidos mudou do 1º para o 2º turno.`,
           val: (x) => sh(x.t2, B) - sh(x.t1, B), tipo: "div", cor: [A, B], fmt: pp, dom: 0.3 },
         { id: "z", nome: "Fora do padrão", desc: `Diferença entre o resultado de ${CAND[A].nome} no 2º turno e o que o 1º turno da própria cidade indicava (veja a explicação mais abaixo). Cores fortes = mais longe do esperado.`,
-          val: (x) => (x.mod ? x.mod.r : x.resVV ? x.res / x.resVV : NaN), tipo: "div", cor: [B, A], fmt: pp, dom: 0.08 },
+          val: (x) => (x.mod ? x.mod.r : NaN), tipo: "div", cor: [B, A], fmt: pp, dom: 0.08,
+          // na lista: municípios em ordem de improbabilidade; estados pela quantidade de atípicos
+          ord: (x) => (x.mod ? Math.abs(x.mod.z) : x.atip),
+          rotulo: (x) => (x.mod ? `${pp(x.mod.r)} · ${desvios(x.mod.z)}` : !("n" in x) ? "sem dados" : x.atip ? `${fmt(x.atip)} atípico${x.atip > 1 ? "s" : ""}` : "nenhum atípico"),
+          barra: (x) => (x.mod ? Math.abs(x.mod.z) : x.atip) },
         { id: "virada", nome: "Viradas", desc: "Municípios onde quem liderou o 1º turno perdeu o 2º turno, na cor do vencedor do 2º turno.",
-          val: (x) => (x.mod ? (x.mod.virada ? 1 : 0) : x.viradas), tipo: "virada", fmt: (v) => (v === 1 ? "Virou" : v === 0 ? "Manteve" : fmt(v)) },
+          val: (x) => (x.mod ? (x.mod.virada ? 1 : 0) : NaN), tipo: "virada", fmt: (v) => (v === 1 ? "Virou" : v === 0 ? "Manteve" : "—"),
+          ord: (x) => (x.mod ? (x.mod.virada ? 1e9 + x.t2.e : x.t2.e) : x.viradas),
+          rotulo: (x) => (x.mod ? (x.mod.virada ? `Virou para ${CAND[x.mod.venc2].nome}` : "Manteve") : !("n" in x) ? "sem dados" : x.viradas ? `${fmt(x.viradas)} virada${x.viradas > 1 ? "s" : ""}` : "nenhuma"),
+          barra: (x) => (x.mod ? (x.mod.virada ? 1 : 0) : x.viradas) },
         { id: "dabst", nome: "Variação da abstenção (p.p.)", desc: "Quanto a abstenção subiu ou caiu entre os turnos.",
           val: (x) => x.t2.a / x.t2.e - x.t1.a / x.t1.e, tipo: "divn", fmt: pp, dom: 0.08 },
       );
@@ -360,8 +375,12 @@
   }
 
   function desenharMapa() {
-    const cv = $("#cv-mapa");
-    if (!MAPA || !MP.feats.length) { cv.hidden = true; return; }
+    const cv = $("#cv-mapa"), aviso = $("#mapa-aviso");
+    const exterior = (S.esc.tipo === "uf" && S.esc.id === "ZZ") || (S.esc.tipo === "rg" && S.esc.id === "Exterior") || (S.esc.tipo === "mun" && POR_ID.get(S.esc.id).uf === "ZZ");
+    aviso.hidden = !exterior && !!MAPA;
+    aviso.textContent = !MAPA ? "Não foi possível carregar o mapa." : "As cidades do exterior não aparecem no mapa. Use a lista ao lado.";
+    $("#legenda").hidden = exterior;
+    if (!MAPA || !MP.feats.length || exterior) { cv.hidden = true; return; }
     cv.hidden = false;
     const w = cv.clientWidth || 600, h = Math.round(Math.min(w * 0.95, 680)), dpr = window.devicePixelRatio || 1;
     cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
@@ -416,7 +435,7 @@
     const t = tDe(), cmp = S.turno === "cmp" && TEM_T2;
     tip.append(el("div", {}, el("b", {}, m.nome), ` · ${m.uf}`));
     const v = MP.met.val(m);
-    tip.append(el("div", { class: "linha" }, el("span", {}, MP.met.nome), el("b", { class: "num" }, typeof v === "object" ? MP.met.fmt(v) : MP.met.fmt(v))));
+    tip.append(el("div", { class: "linha" }, el("span", {}, MP.met.nome), el("b", { class: "num" }, MP.met.rotulo ? MP.met.rotulo(m) : MP.met.fmt(v))));
     const lin = (rot, val) => tip.append(el("div", { class: "linha" }, el("span", {}, rot), el("span", { class: "num" }, val)));
     if (cmp) {
       for (const n of FIN) lin(CAND[n].nome, `${pct(sh(m.t1, n))} → ${pct(sh(m.t2, n))}`);
@@ -457,31 +476,38 @@
     const grad = `linear-gradient(90deg, ${cores.join(",")})`;
     L.append(el("div", { class: "rampa-wrap" }, el("div", { class: "rampa", style: `background:${grad}` }),
       el("div", { class: "rampa-ticks num" }, el("span", {}, rotLo), met.tipo.startsWith("div") || met.tipo === "venc2" ? el("span", {}, met.tipo === "venc2" ? "empate" : "0") : null, el("span", {}, rotHi))));
-    if (met.tipo === "div" || met.tipo === "divn") L.append(el("span", { class: "muted" }, met.tipo === "divn" ? "Verde = abstenção caiu; laranja = subiu." : `Para o lado de ${CAND[met.cor[1]].nome} ou de ${CAND[met.cor[0]].nome}.`));
+    if (met.tipo === "div" || met.tipo === "divn") L.append(el("span", { class: "muted" }, met.tipo === "divn" ? "Verde = abstenção caiu; laranja = subiu." : `Esquerda: a favor de ${CAND[met.cor[0]].nome}. Direita: a favor de ${CAND[met.cor[1]].nome}.`));
   }
 
   function ranking(met) {
     const box = $("#ranking"); box.textContent = "";
+    const ok = (x) => !!(x[tDe()] && (S.turno !== "cmp" || x.t1));
+    const num = (v) => (v && typeof v === "object" ? v.p : v);
     const fs = filhos(S.esc).map((f) => {
       const x = f.m || agregar(listaDe(f.esc));
-      let v = (x[tDe()] && (S.turno !== "cmp" || x.t1)) ? met.val(x) : NaN;
-      return { ...f, x, v };
+      const v = ok(x) ? met.val(x) : NaN;
+      const ord = ok(x) ? (met.ord ? met.ord(x) : num(v)) : NaN;
+      const barra = ok(x) ? (met.barra ? met.barra(x) : Math.abs(num(v))) : NaN;
+      return { ...f, x, v, ord: isFinite(ord) ? ord : -Infinity, barra };
     });
-    const num = (v) => (v && typeof v === "object" ? v.p : v);
-    fs.sort((a, b) => (num(b.v) ?? -Infinity) - (num(a.v) ?? -Infinity) || 0);
-    const vals = fs.map((f) => Math.abs(num(f.v))).filter(isFinite);
-    const mx = Math.max(...vals, 1e-9);
+    fs.sort((a, b) => b.ord - a.ord);
+    const mx = Math.max(...fs.map((f) => f.barra).filter(isFinite), 1e-9);
     $("#rank-titulo").textContent = `${met.nome} · ${S.esc.tipo === "br" || S.esc.tipo === "rg" ? "por estado" : "por município"}`;
+    $("#rank-nota").textContent = semVotacao(S.esc.tipo === "mun" ? { tipo: "uf", id: POR_ID.get(S.esc.id).uf } : S.esc);
     fs.forEach((f, i) => {
-      const v = num(f.v), atual = S.esc.tipo === "mun" && f.esc.id === S.esc.id;
-      const cor = MP.cor(f.v, f.m || f.x) || "var(--line)";
+      const atual = S.esc.tipo === "mun" && f.esc.id === S.esc.id;
+      let cor = MP.cor(f.v, f.m || f.x);
+      if (!cor && met.tipo === "virada") cor = "var(--fg-2)";
+      if (!cor && met.id === "z") cor = "var(--warn)";
+      const rot = !ok(f.x) ? "sem dados" : met.rotulo ? met.rotulo(f.x) : met.fmt(f.v);
       box.append(el("button", { type: "button", onclick: () => irPara(f.esc), "aria-current": atual ? "true" : null, style: atual ? "background:var(--accent-soft)" : null },
         el("span", { class: "pos num" }, i + 1),
-        el("span", { style: "min-width:0" }, el("div", { class: "nm" }, f.esc.tipo === "uf" ? `${f.nome}` : f.nome),
-          el("div", { class: "mini", style: `width:${isFinite(v) ? Math.max(2, (Math.abs(v) / mx) * 100) : 0}%;background:${cor}` })),
-        el("span", { class: "num small" }, met.fmt(f.v))));
+        el("span", { style: "min-width:0" }, el("div", { class: "nm" }, f.nome),
+          el("div", { class: "mini", style: `width:${isFinite(f.barra) ? Math.max(2, (f.barra / mx) * 100) : 0}%;background:${cor || "var(--line)"}` })),
+        el("span", { class: "num small" }, rot)));
     });
   }
+  const desvios = (z) => `${z > 0 ? "+" : z < 0 ? "−" : ""}${Math.abs(z).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} desv.`;
 
   // ---------- análise entre turnos ----------
   function renderAnalise() {
@@ -606,7 +632,7 @@
     tx.append(`Para cada município, estimamos quanto ${CAND[A].nome} "deveria" ter no 2º turno olhando só para o 1º turno da própria cidade: `,
       `quanto ${CAND[A].nome} teve, quanto tiveram os candidatos eliminados, quanto a abstenção mudou e em que estado fica a cidade. `,
       `A regra foi ajustada com os ${fmt(MODELO.n)} municípios ao mesmo tempo e explica `, el("b", {}, pct(MODELO.r2)), ` da variação do resultado. `,
-      `Em média, cada ponto que ${CAND[A].nome} teve no 1º turno virou ${(b[0]).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ponto no 2º, e os eleitores dos eliminados se dividiram como o estado inteiro se dividiu. `,
+      `Em média, ${CAND[A].nome} manteve os próprios eleitores (cada ponto do 1º turno virou ${b[0].toLocaleString("pt-BR", { maximumFractionDigits: 2 })} ponto no 2º) e ficou com cerca de ${pct(b[1], 0)} dos votos dos candidatos eliminados; o estado de cada cidade entra na conta para captar diferenças regionais. `,
       `Um município "fora do padrão" é aquele cujo resultado real ficou longe dessa estimativa, levando em conta que cidades pequenas variam mais por acaso. `,
       `No país, `, el("b", {}, `${fmt(atip)} municípios`), ` ficaram a mais de 3 desvios do esperado. `,
       el("b", {}, "Fora do padrão não quer dizer fraude"), `: costuma refletir um prefeito ou liderança local que apoiou um dos lados, uma campanha forte na cidade, mudanças no transporte de eleitores ou um 1º turno com candidato muito local. É um ponto de partida para olhar mais de perto, não uma conclusão.`);
@@ -681,6 +707,7 @@
       })));
     }
     tab.append(tb);
+    $("#tab-nota").textContent = semVotacao(S.esc.tipo === "mun" ? { tipo: "uf", id: POR_ID.get(S.esc.id).uf } : S.esc);
   }
 
   // ---------- navegação e eventos ----------
