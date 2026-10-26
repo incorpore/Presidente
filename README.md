@@ -44,7 +44,7 @@ Source: GitHub Actions** e rode o workflow pela aba *Actions*.
 |---|---|
 | `data/presidente_2026.json` | Resultados por município, UF e Brasil, dos dois turnos, baixados de `resultados.tse.jus.br` (a API pública do site e do aplicativo oficial do TSE). |
 | `data/raw/` | Arquivos de configuração do TSE (lista de eleições e de municípios) e exemplos dos arquivos brutos. |
-| `data/geo/` | Malhas municipais e estaduais do IBGE (`servicodados.ibge.gov.br`). |
+| `web/dados/mapa.json` | Malha municipal do IBGE (cópia em github.com/tbrugz/geodata-br), simplificada por `scripts/build_geo.py` sem abrir buracos entre vizinhos. |
 | `web/dados/` | Versões compactas para o painel, geradas por `scripts/build_web.py`. |
 
 O script `scripts/build_web.py` confere se a soma dos municípios bate com o total
