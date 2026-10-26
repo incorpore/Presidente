@@ -499,7 +499,7 @@
     $("#disp1-cap").textContent = `Cada ponto é um município${S.esc.tipo === "br" ? "" : S.esc.tipo === "rg" ? " da região" : " do estado"}, do tamanho do seu eleitorado. Acima da linha tracejada, ${CAND[A].nome} cresceu no 2º turno; abaixo, perdeu espaço. Pontos em destaque estão fora do padrão (mais de 3 desvios).`;
     const O = (m) => outros1(m.t1) / m.t1.vv;
     dispersao($("#cv-disp2"), ctxLista, destaque, {
-      x: O, y: (m) => sh(m.t2, G) - sh(m.t1, G), xl: "Votos dos eliminados no 1º turno (% dos válidos)", yl: `Crescimento de ${CAND[G].nome} (p.p.)`, yfmt: pp, zero: true,
+      x: O, y: (m) => sh(m.t2, G) - sh(m.t1, G), xl: "Eliminados no 1º turno (% dos válidos)", yl: `Crescimento de ${CAND[G].nome} (p.p.)`, yfmt: pp, zero: true,
     });
     $("#disp2-titulo").textContent = `Votos dos eliminados × crescimento de ${CAND[G].nome}`;
     $("#disp2-cap").textContent = `Onde os candidatos eliminados tiveram mais votos, sobrou mais voto para disputar no 2º turno. Se os pontos sobem da esquerda para a direita, ${CAND[G].nome} cresceu justamente onde havia mais voto de eliminados para herdar.`;
@@ -550,7 +550,7 @@
     const w = cv.clientWidth || 500, h = Math.round(Math.min(420, Math.max(260, w * 0.75))), dpr = window.devicePixelRatio || 1;
     cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
     const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-    const m = { l: 52, r: 12, t: 10, b: 40 };
+    const m = { l: o.yfmt ? 70 : 54, r: 12, t: 10, b: 40 }, nt = w < 420 ? 4 : 5;
     const pts = lista.map((mu) => ({ mu, x: o.x(mu), y: o.y(mu) })).filter((p) => isFinite(p.x) && isFinite(p.y));
     if (!pts.length) return;
     const xe = gr.extent(pts, (p) => p.x), ye = gr.extent(pts, (p) => p.y);
@@ -561,10 +561,10 @@
     const ink = css("--muted"), grid = css("--line"), fg = css("--fg-2");
     ctx.font = "11px " + css("--font-body"); ctx.fillStyle = ink; ctx.strokeStyle = grid; ctx.lineWidth = 1;
     const yf = o.yfmt || ((v) => pct(v, 0)), xf = (v) => pct(v, 0);
-    for (const t of Y.ticks(5)) { ctx.beginPath(); ctx.moveTo(m.l, Y(t) + 0.5); ctx.lineTo(w - m.r, Y(t) + 0.5); ctx.stroke(); ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(o.yfmt ? pp(t, 0) : yf(t), m.l - 6, Y(t)); }
-    for (const t of X.ticks(5)) { ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(xf(t), X(t), h - m.b + 6); }
+    for (const t of Y.ticks(nt)) { ctx.beginPath(); ctx.moveTo(m.l, Y(t) + 0.5); ctx.lineTo(w - m.r, Y(t) + 0.5); ctx.stroke(); ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(o.yfmt ? pp(t, 0) : yf(t), m.l - 6, Y(t)); }
+    for (const t of X.ticks(nt)) { ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(xf(t), X(t), h - m.b + 6); }
     ctx.fillStyle = fg; ctx.textAlign = "center"; ctx.fillText(o.xl, (m.l + w - m.r) / 2, h - 14);
-    ctx.save(); ctx.translate(12, (m.t + h - m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(o.yl, 0, 0); ctx.restore();
+    ctx.save(); ctx.translate(9, (m.t + h - m.b) / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = "middle"; ctx.fillText(o.yl, 0, 0); ctx.restore();
     ctx.setLineDash([4, 4]); ctx.strokeStyle = css("--line-strong"); ctx.beginPath();
     if (o.diag) { ctx.moveTo(X(xe[0]), Y(xe[0])); ctx.lineTo(X(xe[1]), Y(xe[1])); }
     if (o.zero && Y.domain()[0] < 0) { ctx.moveTo(m.l, Y(0)); ctx.lineTo(w - m.r, Y(0)); }
