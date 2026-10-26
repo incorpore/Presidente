@@ -211,7 +211,7 @@
           val: (x) => x.t2.a / x.t2.e - x.t1.a / x.t1.e, tipo: "divn", fmt: pp, dom: 0.08 },
       );
     } else {
-      lista.push({ id: "venc", nome: t === "t2" ? "Vencedor e margem" : "Mais votado", desc: t === "t2"
+      lista.push({ id: "venc", nome: t === "t2" ? `Vencedor e margem (% de ${CAND[A].nome})` : "Mais votado", desc: t === "t2"
         ? `Cor do vencedor em cada município; quanto mais forte, maior a vantagem.`
         : `Cor do candidato mais votado em cada município; quanto mais forte, maior a sua fatia.`,
         val: (x) => (t === "t2" ? sh(x.t2, A) : lider(x.t1)), tipo: t === "t2" ? "venc2" : "venc1", fmt: (v) => (t === "t2" ? pct(v) : v ? CAND[v.n].nome + " " + pct(v.p) : "—") });
@@ -233,27 +233,27 @@
   function escala(met, valores) {
     const mid = css("--mid");
     if (met.tipo === "venc2") {
-      const s = d3.scaleLinear().domain([0.2, 0.5, 0.5, 0.8]).range([css(CAND[B].cor), mixa(css(CAND[B].cor), mid, 0.82), mixa(css(CAND[A].cor), mid, 0.82), css(CAND[A].cor)]).interpolate(d3.interpolateLab).clamp(true);
+      const s = gr.scaleLinear().domain([0.2, 0.5, 0.5, 0.8]).range([css(CAND[B].cor), mixa(css(CAND[B].cor), mid, 0.82), mixa(css(CAND[A].cor), mid, 0.82), css(CAND[A].cor)]).interpolate(gr.interpolateLab).clamp(true);
       return (v) => (isFinite(v) ? s(v) : null);
     }
-    if (met.tipo === "venc1") return (v) => (v ? d3.interpolateLab(mid, css(CAND[v.n].cor))(Math.min(1, Math.max(0.18, (v.p - 0.2) / 0.5))) : null);
+    if (met.tipo === "venc1") return (v) => (v ? gr.interpolateLab(mid, css(CAND[v.n].cor))(Math.min(1, Math.max(0.18, (v.p - 0.2) / 0.5))) : null);
     if (met.tipo === "virada") return (v, x) => (v === 1 && x && x.mod ? css(CAND[x.mod.venc2].cor) : v === 0 ? mid : null);
     if (met.tipo === "seq" || met.tipo === "seqn") {
       const fim = met.tipo === "seq" ? css(met.corSeq) : css("--fg-2");
       const vs = valores.filter(isFinite).sort((a, b) => a - b);
-      const lo = vs.length ? d3.quantileSorted(vs, 0.02) : 0, hi = vs.length ? d3.quantileSorted(vs, 0.98) : 1;
-      const s = d3.scaleLinear().domain([lo, hi]).range([mixa(fim, mid, 0.9), fim]).interpolate(d3.interpolateLab).clamp(true);
+      const lo = vs.length ? gr.quantileSorted(vs, 0.02) : 0, hi = vs.length ? gr.quantileSorted(vs, 0.98) : 1;
+      const s = gr.scaleLinear().domain([lo, hi]).range([mixa(fim, mid, 0.9), fim]).interpolate(gr.interpolateLab).clamp(true);
       s.lo = lo; s.hi = hi;
       const f = (v) => (isFinite(v) ? s(v) : null); f.lo = lo; f.hi = hi; return f;
     }
     // divergentes: neutro no zero
     const [cn, cp] = met.tipo === "divn" ? [css("--accent"), css("--warn")] : [css(CAND[met.cor[0]].cor), css(CAND[met.cor[1]].cor)];
     const vs = valores.filter(isFinite).map(Math.abs).sort((a, b) => a - b);
-    const m = Math.max(0.005, Math.min(met.dom, vs.length ? d3.quantileSorted(vs, 0.97) : met.dom));
-    const s = d3.scaleLinear().domain([-m, 0, m]).range([cn, mid, cp]).interpolate(d3.interpolateLab).clamp(true);
+    const m = Math.max(0.005, Math.min(met.dom, vs.length ? gr.quantileSorted(vs, 0.97) : met.dom));
+    const s = gr.scaleLinear().domain([-m, 0, m]).range([cn, mid, cp]).interpolate(gr.interpolateLab).clamp(true);
     const f = (v) => (isFinite(v) ? s(v) : null); f.lo = -m; f.hi = m; return f;
   }
-  function mixa(c1, c2, t) { return d3.interpolateLab(c1, c2)(t); }
+  function mixa(c1, c2, t) { return gr.interpolateLab(c1, c2)(t); }
 
   // ---------- render ----------
   function render() {
@@ -304,7 +304,7 @@
       ` (${fmt(x.v[p1] - x.v[p2])} votos de diferença).`);
     if (cmp) {
       const y = ag.t1, dG = sh(ag.t2, G) - sh(y, G);
-      lead.append(` Entre os turnos, ${CAND[G].nome} variou ${pp(dG)} e ${CAND[G === A ? B : A].nome} ${pp(sh(ag.t2, G === A ? B : A) - sh(y, G === A ? B : A))}.`);
+      lead.append(` Entre os turnos, ${CAND[G].nome} variou ${pp(dG)} e ${CAND[G === A ? B : A].nome} ${pp(sh(ag.t2, G === A ? B : A) - sh(y, G === A ? B : A))}`.replace(/\.?$/, "."));
     }
 
     const max = Math.max(...ord.map((n) => sh(x, n)), cmp ? Math.max(sh(ag.t1, A), sh(ag.t1, B)) : 0);
@@ -335,11 +335,11 @@
   }
 
   // ---------- mapa ----------
-  const MP = { feats: [], ufs: [], w: 0, h: 0, pick: null, proj: null, cor: null, met: null };
+  const MP = { feats: [], bordas: null, w: 0, h: 0, pick: null, proj: null, cor: null, met: null };
   function prepararMapa() {
     if (!MAPA) return;
     MP.feats = MAPA.mun.features.map((f) => ({ f, m: POR_IBGE.get(String(f.id)) })).filter((x) => x.m);
-    MP.ufs = MAPA.uf.features;
+    MP.bordas = MAPA.bordas;
   }
   function renderMapa() {
     const sec = $("#mapa"); sec.hidden = false;
@@ -369,13 +369,13 @@
     let alvo = MP.feats.filter((x) => lista.has(x.m));
     if (S.esc.tipo === "mun") alvo = MP.feats.filter((x) => x.m.uf === POR_ID.get(S.esc.id).uf);
     if (!alvo.length) alvo = MP.feats;
-    const proj = d3.geoMercator().fitExtent([[8, 8], [w - 8, h - 8]], { type: "FeatureCollection", features: alvo.map((x) => x.f) });
+    const proj = gr.geoMercator().fitExtent([[8, 8], [w - 8, h - 8]], { type: "FeatureCollection", features: alvo.map((x) => x.f) });
     MP.proj = proj;
     const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
     const pk = MP.pick || (MP.pick = document.createElement("canvas"));
     pk.width = w; pk.height = h;
     const pctx = pk.getContext("2d", { willReadFrequently: true }); pctx.clearRect(0, 0, w, h);
-    const path = d3.geoPath(proj, ctx), ppath = d3.geoPath(proj, pctx);
+    const path = gr.geoPath(proj, ctx), ppath = gr.geoPath(proj, pctx);
     const fundo = css("--line"), borda = css("--panel");
     const sel = S.esc.tipo === "mun" ? POR_ID.get(S.esc.id) : null;
     MP.feats.forEach((x, idx) => {
@@ -390,7 +390,7 @@
       if (dentro) { const id = idx + 1; pctx.beginPath(); ppath(x.f.geometry); pctx.fillStyle = `rgb(${id & 255},${(id >> 8) & 255},${(id >> 16) & 255})`; pctx.fill(); }
     });
     ctx.strokeStyle = css("--fg-2"); ctx.lineWidth = 0.7; ctx.globalAlpha = 0.55;
-    for (const f of MP.ufs) { ctx.beginPath(); path(f.geometry); ctx.stroke(); }
+    if (MP.bordas) { ctx.beginPath(); path(MP.bordas); ctx.stroke(); }
     ctx.globalAlpha = 1;
     if (sel) {
       const f = MP.feats.find((x) => x.m === sel);
@@ -452,7 +452,7 @@
     }
     let lo, hi, rotLo, rotHi, cores;
     if (met.tipo === "venc2") { lo = 0.2; hi = 0.8; cores = [0.2, 0.35, 0.5, 0.65, 0.8].map((v) => MP.cor(v)); rotLo = `${CAND[B].nome} 80%`; rotHi = `${CAND[A].nome} 80%`; }
-    else { lo = MP.cor.lo; hi = MP.cor.hi; cores = d3.range(0, 1.0001, 0.25).map((f) => MP.cor(lo + (hi - lo) * f)); rotLo = met.fmt(lo); rotHi = met.fmt(hi); }
+    else { lo = MP.cor.lo; hi = MP.cor.hi; cores = gr.range(0, 1.0001, 0.25).map((f) => MP.cor(lo + (hi - lo) * f)); rotLo = met.fmt(lo); rotHi = met.fmt(hi); }
     const grad = `linear-gradient(90deg, ${cores.join(",")})`;
     L.append(el("div", { class: "rampa-wrap" }, el("div", { class: "rampa", style: `background:${grad}` }),
       el("div", { class: "rampa-ticks num" }, el("span", {}, rotLo), met.tipo.startsWith("div") || met.tipo === "venc2" ? el("span", {}, met.tipo === "venc2" ? "empate" : "0") : null, el("span", {}, rotHi))));
@@ -496,7 +496,7 @@
       x: (m) => sh(m.t1, A), y: (m) => sh(m.t2, A), xl: `${CAND[A].nome} no 1º turno`, yl: `${CAND[A].nome} no 2º turno`, diag: true,
     });
     $("#disp1-titulo").textContent = `${CAND[A].nome}: 1º turno × 2º turno`;
-    $("#disp1-cap").textContent = `Cada ponto é um município${S.esc.tipo === "br" ? "" : " de " + (S.esc.tipo === "mun" ? D.uf[destaque.uf] : nomeDe(S.esc))}, do tamanho do seu eleitorado. Acima da linha tracejada, ${CAND[A].nome} cresceu no 2º turno; abaixo, perdeu espaço. Pontos em destaque estão fora do padrão (mais de 3 desvios).`;
+    $("#disp1-cap").textContent = `Cada ponto é um município${S.esc.tipo === "br" ? "" : S.esc.tipo === "rg" ? " da região" : " do estado"}, do tamanho do seu eleitorado. Acima da linha tracejada, ${CAND[A].nome} cresceu no 2º turno; abaixo, perdeu espaço. Pontos em destaque estão fora do padrão (mais de 3 desvios).`;
     const O = (m) => outros1(m.t1) / m.t1.vv;
     dispersao($("#cv-disp2"), ctxLista, destaque, {
       x: O, y: (m) => sh(m.t2, G) - sh(m.t1, G), xl: "Votos dos eliminados no 1º turno (% dos válidos)", yl: `Crescimento de ${CAND[G].nome} (p.p.)`, yfmt: pp, zero: true,
@@ -553,11 +553,11 @@
     const m = { l: 52, r: 12, t: 10, b: 40 };
     const pts = lista.map((mu) => ({ mu, x: o.x(mu), y: o.y(mu) })).filter((p) => isFinite(p.x) && isFinite(p.y));
     if (!pts.length) return;
-    const xe = d3.extent(pts, (p) => p.x), ye = d3.extent(pts, (p) => p.y);
+    const xe = gr.extent(pts, (p) => p.x), ye = gr.extent(pts, (p) => p.y);
     if (o.diag) { const lo = Math.min(xe[0], ye[0]), hi = Math.max(xe[1], ye[1]); xe[0] = ye[0] = lo; xe[1] = ye[1] = hi; }
-    const X = d3.scaleLinear().domain(xe).nice().range([m.l, w - m.r]);
-    const Y = d3.scaleLinear().domain(ye).nice().range([h - m.b, m.t]);
-    const R = d3.scaleSqrt().domain([0, d3.max(pts, (p) => p.mu.t2.e)]).range([1.2, w < 500 ? 12 : 18]);
+    const X = gr.scaleLinear().domain(xe).nice().range([m.l, w - m.r]);
+    const Y = gr.scaleLinear().domain(ye).nice().range([h - m.b, m.t]);
+    const R = gr.scaleSqrt().domain([0, gr.max(pts, (p) => p.mu.t2.e)]).range([1.2, w < 500 ? 12 : 18]);
     const ink = css("--muted"), grid = css("--line"), fg = css("--fg-2");
     ctx.font = "11px " + css("--font-body"); ctx.fillStyle = ink; ctx.strokeStyle = grid; ctx.lineWidth = 1;
     const yf = o.yfmt || ((v) => pct(v, 0)), xf = (v) => pct(v, 0);
@@ -579,9 +579,11 @@
     }
     if (destaque) {
       const p = pts.find((q) => q.mu === destaque);
-      if (p) { ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), R(p.mu.t2.e) + 3, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = css("--fg"); ctx.stroke(); ctx.fillStyle = css("--fg"); ctx.textAlign = "left"; ctx.font = "600 12px " + css("--font-body"); ctx.fillText(destaque.nome, X(p.x) + R(p.mu.t2.e) + 6, Y(p.y)); }
+      if (p) { ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), R(p.mu.t2.e) + 3, 0, 2 * Math.PI); ctx.lineWidth = 2.5; ctx.strokeStyle = css("--fg"); ctx.stroke(); ctx.fillStyle = css("--fg"); ctx.font = "600 12px " + css("--font-body");
+        const esq = X(p.x) > w * 0.7; ctx.textAlign = esq ? "right" : "left";
+        ctx.fillText(destaque.nome, X(p.x) + (esq ? -1 : 1) * (R(p.mu.t2.e) + 6), Y(p.y)); }
     }
-    const qt = d3.quadtree(pts, (p) => X(p.x), (p) => Y(p.y));
+    const qt = gr.quadtree(pts, (p) => X(p.x), (p) => Y(p.y));
     cv.onmousemove = (ev) => {
       const r = cv.getBoundingClientRect(), q = qt.find(ev.clientX - r.left, ev.clientY - r.top, 24);
       const tip = $("#tip");
@@ -737,9 +739,18 @@
     n.append(
       el("p", {}, "De onde vêm os dados: arquivos públicos do TSE em ", el("a", { href: m.fonte, target: "_blank", rel: "noopener" }, "resultados.tse.jus.br"),
         `, os mesmos usados pelo site e pelo aplicativo oficial de resultados. Baixamos o total de cada um dos ${fmt(MUN.length)} municípios (incluindo cidades no exterior) nos dois turnos. A soma dos municípios é conferida com o total oficial do país e de cada estado.`),
-      el("p", {}, "Mapas: malhas municipais do IBGE. Municípios do exterior aparecem nas tabelas, mas não no mapa."),
+      el("p", {}, `Mapas: malha municipal do IBGE (via github.com/tbrugz/geodata-br), simplificada. ${fmt(MP.feats.length)} municípios aparecem no mapa; as cidades do exterior e os poucos municípios criados depois da malha aparecem só nas tabelas.`),
+      conferencia(),
       el("p", {}, "Percentuais de candidatos são sobre os votos válidos, como na divulgação oficial. Abstenção é sobre o eleitorado; brancos e nulos, sobre quem compareceu."),
       el("p", {}, "Os dados por seção eleitoral (boletins de urna) também são públicos no TSE e permitem descer ainda mais, até a urna. Este painel para no município."));
+  }
+
+  function conferencia() {
+    const difs = (D.conferencia || []).filter((d) => d.campo === "vv");
+    if (!difs.length) return el("p", {}, "Conferência: a soma dos municípios bate exatamente com o total oficial do Brasil e de cada estado, nos dois turnos.");
+    return el("p", {}, "Conferência: a soma dos municípios bate com o total oficial, com uma exceção pequena. ",
+      ...difs.filter((d) => d.local !== "BR").map((d) => `No ${d.t === "t1" ? "1º" : "2º"} turno, em ${D.uf[d.local] || d.local}, o total oficial do estado tem ${fmt(Math.abs(d.oficial - d.soma))} votos válidos ${d.oficial > d.soma ? "a mais" : "a menos"} do que a soma dos arquivos dos municípios (${fmt(d.oficial)} contra ${fmt(d.soma)}). `),
+      "O arquivo oficial do estado foi gerado depois dos arquivos das cidades, então a diferença provavelmente vem de seções atualizadas nesse intervalo. É menos de 0,01% dos votos e não muda o resultado. O painel mostra os números de cada município como o TSE os publicou.");
   }
 
   // ---------- início ----------

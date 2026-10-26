@@ -2,9 +2,8 @@
 """Gera os arquivos compactos usados pelo painel (web/dados/).
 
 Entrada:  data/presidente_<ano>.json (scripts/fetch_tse.py)
-          data/geo/municipios.json e data/geo/ufs.json (malhas do IBGE)
 Saída:    web/dados/painel.json  resultados por município, em colunas
-          web/dados/mapa.json    malhas com coordenadas arredondadas
+(a malha do mapa, web/dados/mapa.json, sai de scripts/build_geo.py)
 
 Também confere se a soma dos municípios bate com o total oficial do TSE
 para o Brasil e para cada UF, e imprime qualquer diferença.
@@ -26,38 +25,7 @@ UF_NOME = {
     "RN": "Rio Grande do Norte", "RS": "Rio Grande do Sul", "RO": "Rondônia", "RR": "Roraima",
     "SC": "Santa Catarina", "SP": "São Paulo", "SE": "Sergipe", "TO": "Tocantins", "ZZ": "Exterior",
 }
-UF_IBGE = {
-    "11": "RO", "12": "AC", "13": "AM", "14": "RR", "15": "PA", "16": "AP", "17": "TO",
-    "21": "MA", "22": "PI", "23": "CE", "24": "RN", "25": "PB", "26": "PE", "27": "AL", "28": "SE", "29": "BA",
-    "31": "MG", "32": "ES", "33": "RJ", "35": "SP", "41": "PR", "42": "SC", "43": "RS",
-    "50": "MS", "51": "MT", "52": "GO", "53": "DF",
-}
 CAMPOS = ("e", "c", "a", "vb", "vn", "vv")
-
-
-def arred(coords, nd=3):
-    if isinstance(coords[0], (int, float)):
-        return [round(coords[0], nd), round(coords[1], nd)]
-    out = [arred(c, nd) for c in coords]
-    if out and isinstance(out[0][0], (int, float)):  # anel: tira pontos repetidos
-        dedup = [out[0]]
-        for p in out[1:]:
-            if p != dedup[-1]:
-                dedup.append(p)
-        out = dedup
-    return out
-
-
-def malha(path, chave):
-    with open(path, encoding="utf-8") as f:
-        gj = json.load(f)
-    feats = []
-    for ft in gj["features"]:
-        cod = str(ft["properties"].get("codarea") or ft["properties"].get(chave))
-        g = ft["geometry"]
-        feats.append({"type": "Feature", "id": cod, "properties": {},
-                      "geometry": {"type": g["type"], "coordinates": arred(g["coordinates"])}})
-    return {"type": "FeatureCollection", "features": feats}
 
 
 def main():
@@ -99,6 +67,7 @@ def main():
     # conferência: soma dos municípios x totais oficiais
     print("municípios:", len(rows), "sem dados:", sem)
     ix = {c: i for i, c in enumerate(cols)}
+    difs = []
     for t in turnos:
         tot = d["totais"][t]
         for alvo in ["BR"] + sorted(k for k in tot if k != "BR"):
@@ -108,24 +77,17 @@ def main():
                 o = tot[alvo].get(k, 0)
                 if s != o:
                     print(f"  diferença {t} {alvo} {k}: municípios={s} oficial={o}")
+                    difs.append({"t": t, "local": alvo, "campo": k, "soma": s, "oficial": o})
         print(f"  {t}: conferência concluída")
 
     totais = {t: {uf: {k: v for k, v in x.items() if k in CAMPOS or k == "cand"}
                   for uf, x in d["totais"][t].items()} for t in turnos}
     painel = {"meta": d["meta"], "cand": cand, "fin": fin, "uf": UF_NOME,
-              "totais": totais, "cols": cols, "rows": rows}
+              "totais": totais, "conferencia": difs, "cols": cols, "rows": rows}
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, "painel.json"), "w", encoding="utf-8") as f:
         json.dump(painel, f, ensure_ascii=False, separators=(",", ":"))
 
-    geo = os.path.join(ROOT, "data", "geo")
-    if os.path.exists(os.path.join(geo, "municipios.json")):
-        mapa = {"mun": malha(os.path.join(geo, "municipios.json"), "codarea"),
-                "uf": malha(os.path.join(geo, "ufs.json"), "codarea")}
-        for ft in mapa["uf"]["features"]:
-            ft["id"] = UF_IBGE.get(ft["id"], ft["id"])
-        with open(os.path.join(OUT, "mapa.json"), "w", encoding="utf-8") as f:
-            json.dump(mapa, f, separators=(",", ":"))
     for n in os.listdir(OUT):
         print(n, os.path.getsize(os.path.join(OUT, n)), "bytes")
 

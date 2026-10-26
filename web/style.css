@@ -141,7 +141,7 @@ section.bloco { background: var(--panel); border: 1px solid var(--line); border-
 .mapa-box { position: relative; min-width: 0; }
 .mapa-box canvas { width: 100%; display: block; cursor: pointer; touch-action: manipulation; }
 .legenda { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 0.82rem; color: var(--fg-2); }
-.legenda .rampa { height: 10px; width: 180px; max-width: 100%; border-radius: 2px; }
+.legenda .rampa { height: 10px; width: 280px; max-width: 100%; border-radius: 2px; }
 .legenda .rampa-wrap { display: grid; gap: 2px; }
 .legenda .rampa-ticks { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); }
 .controles { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

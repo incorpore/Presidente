@@ -28,17 +28,13 @@ jobs:
       - name: Resultados oficiais (TSE)
         run: python3 scripts/fetch_tse.py --ano 2026
 
-      - name: Malhas municipais e estaduais (IBGE)
+      - name: Malha municipal (IBGE, via tbrugz/geodata-br)
         continue-on-error: true
         run: |
           mkdir -p data/geo
-          curl -fsSL --retry 5 -o data/geo/municipios.json \
-            "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo%2Bjson&qualidade=minima&intrarregiao=municipio"
-          curl -fsSL --retry 5 -o data/geo/ufs.json \
-            "https://servicodados.ibge.gov.br/api/v3/malhas/paises/BR?formato=application/vnd.geo%2Bjson&qualidade=minima&intrarregiao=UF"
-          curl -fsSL --retry 5 -o data/geo/ibge_municipios.json \
-            "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
-          ls -la data/geo
+          curl -fsSL --retry 5 -o data/geo/geojs-100-mun.json \
+            "https://raw.githubusercontent.com/tbrugz/geodata-br/master/geojson/geojs-100-mun.json"
+          python3 scripts/build_geo.py
 
       - name: Arquivos do painel
         run: python3 scripts/build_web.py 2026
