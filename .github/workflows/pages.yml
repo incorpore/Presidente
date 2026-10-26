@@ -41,8 +41,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh api "repos/${{ github.repository }}/pages" --jq .build_type > tipo.txt 2>/dev/null; then
-            echo "ativo=sim" >> "$GITHUB_OUTPUT"
-            echo "GitHub Pages ativo (modo: $(cat tipo.txt))"
+            if [ "$(cat tipo.txt)" = "workflow" ]; then
+              echo "ativo=sim" >> "$GITHUB_OUTPUT"
+              echo "GitHub Pages ativo, publicado por este workflow"
+            else
+              echo "ativo=nao" >> "$GITHUB_OUTPUT"
+              echo "::notice::GitHub Pages está no modo 'Deploy from a branch'; o próprio GitHub publica a branch (o index.html da raiz leva ao painel)."
+            fi
           else
             echo "ativo=nao" >> "$GITHUB_OUTPUT"
             msg="GitHub Pages ainda não está ativado. Abra https://github.com/${{ github.repository }}/settings/pages, em Source escolha 'GitHub Actions' e rode este workflow de novo."
