@@ -70,24 +70,20 @@ def to_int(v):
 
 
 def discover(ano):
-    """Procura no ele-c.json as eleições ordinárias federais do ano (1º e 2º turno)."""
+    """Procura no ele-c.json as eleições do ano que têm o cargo Presidente (1º e 2º turno)."""
     cfg = get_json(f"{BASE}/comum/config/ele-c.json")
     save_raw("ele-c.json", cfg)
     t1 = t2 = None
     for pl in cfg.get("pl", []):
+        if pl.get("c") != f"ele{ano}":
+            continue
         for e in pl.get("e", []):
-            dtp = pl.get("dt", "") or e.get("dt", "")
-            if str(ano) not in dtp and str(ano) not in e.get("nm", ""):
+            cargos = {int(cp.get("cd", 0)) for a in e.get("abr", []) for cp in a.get("cp", [])}
+            if int(CARGO) not in cargos:
                 continue
-            # eleições federais/gerais têm o cargo Presidente (0001)
-            cargos = {str(c.get("cd", "")).zfill(4) for c in e.get("cargos", e.get("c", [])) if isinstance(c, dict)}
-            federal = ("Federal" in e.get("nm", "") or "Geral" in e.get("nm", "") or CARGO in cargos)
-            if not federal or e.get("tp", "O") != "O":
-                continue
-            turno = str(e.get("t", ""))
-            if turno == "1" and t1 is None:
+            if str(e.get("t")) == "1" and t1 is None:
                 t1 = (e["cd"], pl.get("dt"))
-            elif turno == "2" and t2 is None:
+            elif str(e.get("t")) == "2" and t2 is None:
                 t2 = (e["cd"], pl.get("dt"))
     return t1, t2
 
