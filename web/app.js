@@ -13,6 +13,7 @@
   };
   const REGIOES = ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul", "Exterior"];
   const CAMPOS = ["e", "c", "a", "vb", "vn", "vv"];
+  const COR_FIXA = { 13: "--s8", 22: "--s1" }; // Lula (13) vermelho, Flávio Bolsonaro (22) azul
 
   const $ = (s) => document.querySelector(s);
   const nf = new Intl.NumberFormat("pt-BR");
@@ -56,11 +57,11 @@
     });
     FIN = TEM_T2 ? D.fin.slice(0, 2) : D.cand.slice(0, 2).map((c) => c.n);
     [A, B] = FIN;
-    // as cores dos finalistas ficam nas duas primeiras posições da paleta
-    if (TEM_T2) {
-      const outros = D.cand.map((c) => c.n).filter((n) => !FIN.includes(n));
-      [A, B, ...outros].forEach((n, k) => { CAND[n].cor = k < 8 ? `--s${k + 1}` : "--outros"; CAND[n].k = k; });
-    }
+    // cores: as tradicionais de cada campanha (Lula vermelho, Flávio azul);
+    // os demais recebem as cores livres da paleta, na ordem de votação
+    const ordem = TEM_T2 ? [A, B, ...D.cand.map((c) => c.n).filter((n) => !FIN.includes(n))] : D.cand.map((c) => c.n);
+    const livres = ["--s2", "--s3", "--s4", "--s5", "--s6", "--s7"].filter((t) => !Object.values(COR_FIXA).includes(t));
+    ordem.forEach((n, k) => { CAND[n].k = k; CAND[n].cor = COR_FIXA[n] || livres.shift() || "--outros"; });
     MUN = D.rows.map((r, i) => {
       const m = { i, uf: r[ix.uf], nm: r[ix.nm], nome: titulo(r[ix.nm]), ibge: String(r[ix.ibge] || ""), cap: !!r[ix.cap] };
       m.rg = REGIAO[m.uf] || "?";
@@ -299,7 +300,7 @@
     const [p1, p2] = ord;
     const dif = sh(x, p1) - sh(x, p2);
     lead.append(t === "t2" ? `No 2º turno, ` : `No 1º turno, `, el("b", {}, CAND[p1].nome),
-      ` ${t === "t2" ? "venceu" : "foi o mais votado"} em ${nome} com `, el("b", {}, pct(sh(x, p1))),
+      ` ${t === "t2" ? "venceu" : "foi o mais votado"} ${S.esc.tipo === "br" ? "no Brasil" : S.esc.tipo === "rg" && S.esc.id !== "Exterior" ? "na " + nome : "em " + nome} com `, el("b", {}, pct(sh(x, p1))),
       ` dos votos válidos (${fmt(x.v[p1])} votos), ${(dif * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} pontos à frente de ${CAND[p2].nome}` +
       ` (${fmt(x.v[p1] - x.v[p2])} votos de diferença).`);
     if (cmp) {
