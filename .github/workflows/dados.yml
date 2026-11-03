@@ -4,7 +4,9 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - "scripts/**"
+      - "scripts/fetch_tse.py"
+      - "scripts/build_web.py"
+      - "scripts/build_geo.py"
       - ".github/workflows/dados.yml"
 
 permissions:
