@@ -234,6 +234,11 @@
       const cands = Object.values(CAND).filter((c) => (t === "t2" ? FIN.includes(c.n) : true)).sort((a, b) => a.k - b.k).slice(0, 8);
       for (const c of cands) lista.push({ id: "p" + c.n, nome: `% de ${c.nome}`, desc: `Fatia de ${c.nome} nos votos válidos.`, val: (x) => sh(x[t], c.n), tipo: "seq", corSeq: c.cor, fmt: pct });
       lista.push(
+        { id: "margem", nome: "Diferença entre os dois (% do eleitorado)", desc: `Votos de ${CAND[A].nome} menos votos de ${CAND[B].nome}, divididos pelo eleitorado da cidade (todas as pessoas aptas, inclusive quem não votou). Mostra onde a vantagem de um dos dois foi maior em relação ao tamanho do lugar.`,
+          val: (x) => ((x[t].v[A] || 0) - (x[t].v[B] || 0)) / x[t].e, tipo: "div", cor: [B, A], dom: 0.7,
+          fmt: (v) => (isFinite(v) ? (v > 0 ? "+" : v < 0 ? "−" : "") + pct(Math.abs(v)) : "—"),
+          rotulo: (x) => { const d = (x[t].v[A] || 0) - (x[t].v[B] || 0); return `${d >= 0 ? "+" : "−"}${pct(Math.abs(d / x[t].e))} (${sinal(d)} votos)`; },
+          ord: (x) => ((x[t].v[A] || 0) - (x[t].v[B] || 0)) / x[t].e },
         { id: "abst", nome: "Abstenção", desc: "Eleitores que não foram votar, em % do eleitorado.", val: (x) => x[t].a / x[t].e, tipo: "seqn", fmt: pct },
         { id: "bn", nome: "Brancos e nulos", desc: "Votos brancos e nulos, em % de quem compareceu.", val: (x) => (x[t].vb + x[t].vn) / x[t].c, tipo: "seqn", fmt: pct },
       );
@@ -684,6 +689,7 @@
         cols.push({ nm: `Var. ${CAND[n].nome}`, v: (f) => sh(f.x.t2, n) - sh(f.x.t1, n), f: pp });
       } else cols.push({ nm: CAND[n].nome, v: (f) => sh(f.x[t], n), f: pct, cor: CAND[n].cor });
     }
+    if (!cmp && FIN.length === 2) cols.push({ nm: `Dif. ${CAND[A].nome}−${CAND[B].nome} (% eleit.)`, v: (f) => ((f.x[t].v[A] || 0) - (f.x[t].v[B] || 0)) / f.x[t].e, f: (v) => (v > 0 ? "+" : v < 0 ? "−" : "") + pct(Math.abs(v)) });
     if (cmp) cols.push({ nm: "Var. abstenção", v: (f) => f.x.t2.a / f.x.t2.e - f.x.t1.a / f.x.t1.e, f: pp });
     else cols.push({ nm: "Vencedor", txt: true, v: (f) => { const l = lider(f.x[t]); return l ? CAND[l.n].nome : ""; }, tag: (f) => { const l = lider(f.x[t]); return l ? CAND[l.n].cor : null; } });
 
