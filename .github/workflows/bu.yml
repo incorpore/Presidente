@@ -10,6 +10,7 @@ on:
   push:
     paths:
       - "scripts/fetch_bu.py"
+      - "scripts/analise_bu.py"
       - ".github/workflows/bu.yml"
 
 permissions:
@@ -33,13 +34,17 @@ jobs:
       - name: Boletins de urna de Presidente, por seção
         run: python3 scripts/fetch_bu.py --ano 2026 --ufs "${{ github.event.inputs.ufs }}"
 
+      - name: Análise seção por seção
+        if: always()
+        run: python3 scripts/analise_bu.py
+
       - name: Gravar no repositório
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f data/bu/_tmp_*
-          git add data/bu || true
+          git add data/bu web/dados/bu.json || true
           git diff --cached --quiet && { echo "sem mudanças"; exit 0; }
           git commit -m "dados: boletins de urna de Presidente por seção (TSE)"
           git pull --rebase -X theirs || true
