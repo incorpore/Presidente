@@ -6,8 +6,8 @@ Fonte: Portal de Dados Abertos do TSE (dadosabertos.tse.jus.br), conjunto
 Cada linha do CSV é um votável numa seção; aqui só o cargo Presidente.
 
 Para cada seção guardamos: eleitores aptos, comparecimento, abstenções,
-eleitores liberados sem a digital (QT_ELEITORES_BIOMETRIA_NH: tinham biometria,
-mas foram habilitados por outro meio, como o ano de nascimento), tipo de urna,
+eleitores liberados sem a digital (QT_ELEI_BIOM_SEM_HABILITACAO: tinham biometria,
+mas foram habilitados por outro meio, como o ano de nascimento), seções agregadas, tipo de urna,
 horários de abertura e encerramento e votos de cada candidato, branco e nulo.
 
 Saída: data/bu/secoes_<turno>_<UF>.csv.gz (uma linha por seção) e
@@ -115,7 +115,9 @@ def processar(turno, uf, url):
                             "zona": g(row, "NR_ZONA"), "secao": g(row, "NR_SECAO"),
                             "local": g(row, "NR_LOCAL_VOTACAO"),
                             "aptos": g(row, "QT_APTOS"), "comp": g(row, "QT_COMPARECIMENTO"),
-                            "abst": g(row, "QT_ABSTENCOES"), "nh": g(row, "QT_ELEITORES_BIOMETRIA_NH"),
+                            "abst": g(row, "QT_ABSTENCOES"),
+                            "nh": g(row, "QT_ELEI_BIOM_SEM_HABILITACAO") or g(row, "QT_ELEITORES_BIOMETRIA_NH"),
+                            "agreg": g(row, "DS_SECOES_AGREGADAS").replace("#NULO#", ""),
                             "tipo_urna": g(row, "DS_TIPO_URNA"), "urna": g(row, "NR_URNA_EFETIVADA"),
                             "abertura": hora(g(row, "DT_ABERTURA")), "encerr": hora(g(row, "DT_ENCERRAMENTO")),
                             "votos": {},
@@ -124,7 +126,7 @@ def processar(turno, uf, url):
                     s["votos"][nr] = s["votos"].get(nr, 0) + int(g(row, "QT_VOTOS") or 0)
     os.remove(tmp)
     nums = sorted({n for s in secoes.values() for n in s["votos"]})
-    campos = ["mun", "nm", "zona", "secao", "local", "aptos", "comp", "abst", "nh", "tipo_urna", "urna", "abertura", "encerr"]
+    campos = ["mun", "nm", "zona", "secao", "local", "aptos", "comp", "abst", "nh", "agreg", "tipo_urna", "urna", "abertura", "encerr"]
     dst = os.path.join(OUT, f"secoes_{turno}_{uf}.csv.gz")
     with gzip.open(dst, "wt", encoding="utf-8", newline="") as f:
         w = csv.writer(f)
