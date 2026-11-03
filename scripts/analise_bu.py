@@ -29,7 +29,7 @@ from collections import defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BU = os.path.join(ROOT, "data", "bu")
 A, B = "13", "22"  # Lula, Flávio Bolsonaro
-LIM = 300  # alertas guardados por tipo no painel
+LIM = 800  # alertas guardados por tipo no painel
 
 
 def i(x):
@@ -55,8 +55,42 @@ def ler():
     return sec
 
 
-def validos(x):
-    return sum(q for n, q in x["v"].items() if n not in ("95", "96"))
+FUSO = {}  # (uf, município) -> minutos a somar para chegar à hora de Brasília
+
+
+def calibrar_fusos(sec):
+    """Os horários do BU estão na hora local. Como toda seção abre às 8h de Brasília,
+    o horário de abertura mais comum de cada município revela o fuso dele
+    (inclusive o oeste do Amazonas, uma hora atrás de Manaus)."""
+    cont = defaultdict(lambda: defaultdict(int))
+    for k, s in sec.items():
+        for x in s.values():
+            if re.match(r"\d{2}:\d{2}", x["ab"] or ""):
+                cont[(k[0], k[1])][int(x["ab"][:2])] += 1
+    for m, c in cont.items():
+        FUSO[m] = (8 - max(c, key=c.get)) * 60
+
+
+def brasilia(h, k):
+    """Minutos desde 0h na hora de Brasília (None no exterior ou sem horário)."""
+    if k[0] == "ZZ" or not re.match(r"\d{2}:\d{2}", h or ""):
+        return None
+    return int(h[:2]) * 60 + int(h[3:5]) + FUSO.get((k[0], k[1]), 0)
+
+
+def hhmm(m):
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+# candidatos da totalização oficial; votos em outro número (ex.: candidatura
+# cancelada depois da carga das urnas) contam como nulos, como faz o TSE
+with open(os.path.join(ROOT, "data", "presidente_2026.json"), encoding="utf-8") as _f:
+    _d = json.load(_f)
+OFICIAIS = {t: {c["n"] for c in _d["candidatos"][t]} for t in _d["candidatos"]}
+
+
+def validos(x, t="t2"):
+    return sum(q for n, q in x["v"].items() if n in OFICIAIS.get(t, ()))
 
 
 def inclinacao(pares):
@@ -92,6 +126,7 @@ def corr(xs, ys):
 
 def main():
     sec = ler()
+    calibrar_fusos(sec)
     print(len(sec), "seções")
     alertas = defaultdict(list)
 
@@ -117,13 +152,15 @@ def main():
                 agg["nh"] += x["nh"]
                 agg["A"] += x["v"].get(A, 0)
                 agg["B"] += x["v"].get(B, 0)
-                agg["vv"] += validos(x)
+                agg["vv"] += validos(x, t)
             mun[(k[0], k[1])][t]["nm"] = x["nm"]
             tipos[t][x["tipo"]] += 1
             if x["urna"] and x["urna"] not in ("-1", "0"):
                 urnas[t][x["urna"]].append(k)
-            horas[t][("ab", x["ab"][:2])] += 1
-            horas[t][("enc", x["enc"][:2])] += 1
+            for nome, h in (("ab", x["ab"]), ("enc", x["enc"])):
+                m = brasilia(h, k)
+                if m is not None:
+                    horas[t][(nome, hhmm(m // 30 * 30))] += 1
 
             # 2. consistência do boletim
             if x["comp"] + x["abst"] != x["aptos"]:
@@ -139,7 +176,7 @@ def main():
                 alerta("urna_tipo", k, t, f"tipo de urna: {x['tipo']}", x["comp"])
             if x["aptos"] >= 50 and x["comp"] == x["aptos"]:
                 alerta("comp_100", k, t, f"todos os {x['aptos']} aptos votaram", x["aptos"])
-            vv = validos(x)
+            vv = validos(x, t)
             if t == "t2" and vv >= 50 and (x["v"].get(A, 0) == vv or x["v"].get(B, 0) == vv):
                 quem = "Lula" if x["v"].get(A, 0) == vv else "Flávio Bolsonaro"
                 alerta("unanime", k, t, f"todos os {vv} votos válidos para {quem}", vv)
@@ -147,12 +184,14 @@ def main():
                 p = x["nh"] / x["comp"]
                 if p >= 0.30:
                     alerta("nh_alto", k, t, f"{x['nh']} de {x['comp']} ({p:.0%}) liberados sem digital", p * 1000 + x["nh"] / 1000)
-            hab = x["ab"][:2]
-            hen = x["enc"][:2]
-            if hab and (hab < "06" or hab > "10"):
-                alerta("horario", k, t, f"abertura às {x['ab']}", 1)
-            if hen and (hen < "16" or hen >= "20"):
-                alerta("horario", k, t, f"encerramento às {x['enc']}", 1)
+            # horários do BU estão na hora local; convertidos para a de Brasília
+            ab, enc = brasilia(x["ab"], k), brasilia(x["enc"], k)
+            if ab is not None and (ab < 7 * 60 or ab >= 9 * 60):
+                alerta("abertura", k, t, f"abriu às {hhmm(ab)} (hora de Brasília)", abs(ab - 8 * 60))
+            if enc is not None and enc < 17 * 60:
+                alerta("encerrou_cedo", k, t, f"encerrou às {hhmm(enc)} (hora de Brasília), antes das 17h", 17 * 60 - enc)
+            if enc is not None and enc >= 19 * 60:
+                alerta("encerrou_tarde", k, t, f"encerrou às {hhmm(enc)} (hora de Brasília)", enc)
 
     for t in ("t1", "t2"):
         for u, ks in urnas[t].items():
@@ -172,7 +211,7 @@ def main():
             x = s.get(t)
             if not x or x["comp"] < 30:
                 continue
-            vv = validos(x)
+            vv = validos(x, t)
             if not vv:
                 continue
             pares.append(((k[0], k[1]), x["nh"] / x["comp"], x["v"].get(A, 0) / vv, x["comp"]))
@@ -184,7 +223,7 @@ def main():
     dx, dy, pares = [], [], []
     for k, s in sec.items():
         if "t1" in s and "t2" in s and s["t1"]["comp"] >= 30 and s["t2"]["comp"] >= 30:
-            v1, v2 = validos(s["t1"]), validos(s["t2"])
+            v1, v2 = validos(s["t1"], "t1"), validos(s["t2"], "t2")
             if not (v1 and v2):
                 continue
             x = s["t2"]["nh"] / s["t2"]["comp"] - s["t1"]["nh"] / s["t1"]["comp"]
@@ -194,6 +233,28 @@ def main():
             pares.append(((k[0], k[1]), x, y, s["t2"]["comp"]))
     b, n = inclinacao(pares)
     efeitos["variacao"] = {"inclinacao_mesma_cidade": b, "secoes": n, "corr_bruta": corr(dx, dy)}
+
+    # seções do 2º turno que encerraram entre 19h e 19h10 (hora de Brasília): comparadas
+    # com as demais seções das mesmas cidades, do 1º para o 2º turno
+    pico = {k for k, s in sec.items() if "t2" in s and (lambda e: e is not None and 19 * 60 <= e < 19 * 60 + 10)(brasilia(s["t2"]["enc"], k))}
+    cidades = defaultdict(int)
+    for k in pico:
+        cidades[(k[0], sec[k]["t2"]["nm"])] += 1
+    grupos = {"pico": defaultdict(int), "resto": defaultdict(int)}
+    cid_pico = {(a, b) for a, b, _, _ in pico}
+    for k, s in sec.items():
+        if (k[0], k[1]) not in cid_pico or "t1" not in s or "t2" not in s:
+            continue
+        g = grupos["pico" if k in pico else "resto"]
+        g["secoes"] += 1
+        for t in ("t1", "t2"):
+            g["A" + t] += s[t]["v"].get(A, 0)
+            g["vv" + t] += validos(s[t], t)
+            g["comp" + t] += s[t]["comp"]
+            g["aptos" + t] += s[t]["aptos"]
+            g["nh" + t] += s[t]["nh"]
+    fech19 = {"secoes": len(pico), "cidades": [[u, n, q] for (u, n), q in sorted(cidades.items(), key=lambda x: -x[1])[:12]],
+              "grupos": {k: dict(v) for k, v in grupos.items()}}
 
     # faixas de liberação sem digital (2º turno): resultado de Lula em cada faixa
     faixas = []
@@ -206,7 +267,7 @@ def main():
                 f["comp"] += x["comp"]
                 f["nh"] += x["nh"]
                 f["A"] += x["v"].get(A, 0)
-                f["vv"] += validos(x)
+                f["vv"] += validos(x, "t2")
         faixas.append({"de": lo, "ate": min(hi, 1), **f})
 
     def resumo(a):
@@ -219,6 +280,7 @@ def main():
                 for (u, m), v in mun.items()},
         "efeitos": efeitos,
         "faixas_nh": faixas,
+        "fechamento_19h": fech19,
         "tipos_urna": {t: dict(tipos[t]) for t in tipos},
         "horarios": {t: {f"{a}-{h}": n for (a, h), n in sorted(horas[t].items())} for t in horas},
         "alertas_total": {k: len(v) for k, v in alertas.items()},

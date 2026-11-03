@@ -282,6 +282,7 @@
     renderResultado();
     renderMapa();
     renderAnalise();
+    renderBU();
     renderTabela();
     try { history.replaceState(null, "", "#" + hashDe()); } catch (e) { /* sem histórico */ }
   }
@@ -669,6 +670,138 @@
     tab.append(tb);
   }
 
+
+  // ---------- boletins de urna (seção por seção) ----------
+  let BU = null;
+  const POR_NOME = new Map(); // "UF|NOME" -> município
+  const ALERTAS = {
+    conta_aptos: ["Comparecimento + abstenção ≠ eleitores aptos", "Boletins em que a conta básica não fecha."],
+    conta_votos: ["Votos ≠ comparecimento", "Boletins em que o total de votos para Presidente é diferente do número de pessoas que votaram."],
+    acima_aptos: ["Mais votantes que eleitores aptos", "Boletins com mais gente votando do que eleitores cadastrados na seção."],
+    nh_acima: ["Mais liberados sem digital que votantes", "Boletins em que o número de liberados sem digital passa do número de votantes."],
+    unanime: ["Todos os votos para um candidato", "Seções com 50 ou mais votos válidos no 2º turno em que um dos dois teve 100%. Acontece sobretudo em aldeias indígenas e comunidades pequenas e isoladas, que costumam votar em bloco."],
+    comp_100: ["Todos os eleitores votaram", "Seções com 50 ou mais eleitores em que ninguém faltou. É raro, mas acontece em seções pequenas e especiais, como presídios, unidades de internação e aldeias."],
+    nh_alto: ["Mais de 30% liberados sem digital", "Seções com 30 ou mais votantes em que mais de 30% foram liberados sem a digital. Costuma ocorrer onde há muitos idosos ou trabalhadores rurais, cujas digitais são difíceis de ler, ou quando o leitor da urna falhou."],
+    abertura: ["Abriu fora do horário", "Seções que abriram antes das 7h ou depois das 9h (hora de Brasília). Atrasos costumam vir de troca de urna ou falta de mesário; quem chega até as 17h pode votar mesmo assim."],
+    encerrou_tarde: ["Encerrou depois das 19h", "Seções que fecharam depois das 19h (hora de Brasília). Quem está na fila às 17h tem direito de votar, então filas longas atrasam o fim."],
+    encerrou_cedo: ["Encerrou antes das 17h", "Seções que fecharam antes das 17h (hora de Brasília)."],
+    urna_repetida: ["Mesmo número de urna em várias seções", "Um mesmo número de urna aparece em boletins de mais de uma seção."],
+    so_um_turno: ["Seção em só um turno", "Seções que aparecem em um turno e não no outro."],
+  };
+
+  function buDe(esc) {
+    if (!BU) return null;
+    const soma = (lista) => {
+      const o = { t1: {}, t2: {} };
+      for (const x of lista) for (const t of ["t1", "t2"]) for (const [k, v] of Object.entries(x[t] || {})) o[t][k] = (o[t][k] || 0) + v;
+      return o;
+    };
+    const deMun = (v) => ({ nm: v[0], t1: { secoes: v[1], aptos: v[2], comp: v[3], nh: v[4], A: v[5], B: v[6], vv: v[7] }, t2: { secoes: v[8], aptos: v[9], comp: v[10], nh: v[11], A: v[12], B: v[13], vv: v[14] } });
+    if (esc.tipo === "br") return BU.total;
+    if (esc.tipo === "uf") return BU.uf[esc.id] || null;
+    if (esc.tipo === "rg") return soma(Object.keys(BU.uf).filter((u) => REGIAO[u] === esc.id).map((u) => BU.uf[u]));
+    const m = POR_ID.get(esc.id), k = m && Object.keys(BU.mun).find((c) => c.startsWith(m.uf + "-") && BU.mun[c][0] === m.nm);
+    return k ? deMun(BU.mun[k]) : null;
+  }
+  function munDoBU(uf, nm) { return POR_NOME.get(`${uf}|${nm}`); }
+  function dentroDoEscopo(uf, nm) {
+    const e = S.esc;
+    if (e.tipo === "br") return true;
+    if (e.tipo === "rg") return REGIAO[uf] === e.id;
+    if (e.tipo === "uf") return uf === e.id;
+    const m = POR_ID.get(e.id); return m && m.uf === uf && m.nm === nm;
+  }
+
+  function renderBU() {
+    const sec = $("#urnas");
+    if (!BU) { sec.hidden = true; return; }
+    sec.hidden = false;
+    const b = buDe(S.esc), nome = nomeDe(S.esc);
+    const inc = Object.entries(BU.alertas_total).filter(([k]) => ["conta_aptos", "conta_votos", "acima_aptos", "nh_acima"].includes(k)).reduce((a, [, v]) => a + v, 0);
+    const lead = $("#bu-lead"); lead.textContent = "";
+    lead.append(`Baixamos do TSE os ${fmt(BU.total.t1.secoes)} boletins de urna do 1º turno e os ${fmt(BU.total.t2.secoes)} do 2º turno. `,
+      "Somados, dão exatamente o resultado oficial de cada município. ",
+      el("b", {}, inc ? `${fmt(inc)} boletins têm contas que não fecham.` : "Nenhum boletim tem conta que não fecha"),
+      inc ? "" : ": em todos, comparecimento mais abstenção dá o número de eleitores aptos, os votos somam o comparecimento e ninguém foi liberado sem digital além de quem votou.");
+    const k = $("#bu-kpis"); k.textContent = "";
+    const kp = (rot, v, d) => k.append(el("div", { class: "kpi" }, el("span", { class: "eyebrow" }, rot), el("span", { class: "v num" }, v), el("span", { class: "d num" }, d)));
+    if (b) {
+      kp("Seções", fmt(b.t2.secoes || b.t1.secoes), nome);
+      for (const t of ["t1", "t2"]) if (b[t] && b[t].comp) kp(`Sem digital · ${t === "t1" ? "1º" : "2º"} turno`, pct(b[t].nh / b[t].comp), `${fmt(b[t].nh)} de ${fmt(b[t].comp)} votantes`);
+    }
+    kp("Contas que não fecham", fmt(inc), "em todos os boletins do país");
+
+    // liberação sem digital x voto
+    const ef = BU.efeitos, tx = $("#bu-nh-texto"); tx.textContent = "";
+    const dez = (x) => (x * 10).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+    tx.append("Quem tem biometria cadastrada mas a digital não é reconhecida pode votar mesmo assim: o mesário confere a identidade e libera a urna com outro dado, como o ano de nascimento. ",
+      "Se isso fosse usado para votar no lugar de outras pessoas, seções com mais liberações deveriam ter mais votos para um lado, e a seção que liberou mais gente no 2º turno do que no 1º deveria ter mudado de voto. ",
+      el("b", {}, "Não é o que os boletins mostram. "),
+      `Comparando seções da mesma cidade no 2º turno, 10 pontos a mais de liberação sem digital andam junto com só ${dez(ef.t2.inclinacao_mesma_cidade)} ponto a mais para ${CAND[A].nome}. `,
+      `E, na mesma seção, quanto a liberação mudou do 1º para o 2º turno não tem relação com quanto o voto mudou (${dez(ef.variacao.inclinacao_mesma_cidade)} ponto a cada 10 pontos, correlação de ${ef.variacao.corr_bruta.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}). `,
+      "A liberação sem digital costuma ser maior onde as digitais são mais difíceis de ler, como entre idosos e trabalhadores braçais, e nos dados aparece alta tanto em cidades que votaram em peso em Lula quanto em cidades que votaram em peso em Flávio.");
+    const fx = $("#bu-faixas"); fx.textContent = "";
+    for (const f of BU.faixas_nh) {
+      if (!f.vv) continue;
+      const p = f.A / f.vv;
+      const rot = f.ate >= 1 ? `${pct(f.de, 0)} ou mais` : `${pct(f.de, 0)} a ${pct(f.ate, 0)}`;
+      const tr = el("div", { class: "trilho", style: "background:var(--mid);border-radius:3px" },
+        el("div", { class: "seg-b", style: `left:0;width:${p * 100}%;background:var(${CAND[A].cor})` }),
+        el("div", { class: "seg-b", style: `left:${p * 100}%;width:${(1 - p) * 100}%;background:var(${CAND[B].cor})` }),
+        el("div", { style: "position:absolute;left:50%;top:-3px;bottom:-3px;border-left:2px dashed var(--fg)" }));
+      fx.append(el("div", { class: "ponte-linha" }, el("span", {}, `${rot} sem digital`), tr, el("span", { class: "v num small" }, `${CAND[A].nome} ${pct(p)} · ${fmt(f.secoes)} seções`)));
+    }
+    $("#bu-faixas-nota").textContent = `2º turno, seções com 30 ou mais votantes, agrupadas pela parcela de liberados sem digital. A linha tracejada marca 50%.`;
+
+    // tabela por local
+    const t = $("#tab-nh"); t.textContent = "";
+    const fs = filhos(S.esc).map((f) => ({ f, b: buDe(f.esc) })).filter((x) => x.b && x.b.t2 && x.b.t2.comp);
+    fs.sort((a, b) => b.b.t2.nh / b.b.t2.comp - a.b.t2.nh / a.b.t2.comp);
+    $("#bu-nh-titulo").textContent = `Liberação sem digital · ${S.esc.tipo === "br" || S.esc.tipo === "rg" ? "por estado" : "por município"}`;
+    t.append(el("thead", {}, el("tr", {}, ["Local", "Seções", "Sem digital 1º", "Sem digital 2º", "Variação", `${CAND[A].nome} 2º`].map((c, i) => el("th", { class: i ? "" : "txt" }, c)))));
+    const tb = el("tbody");
+    for (const { f, b: x } of fs) {
+      const p1 = x.t1.comp ? x.t1.nh / x.t1.comp : NaN, p2 = x.t2.nh / x.t2.comp;
+      tb.append(el("tr", { onclick: () => irPara(f.esc), style: S.esc.tipo === "mun" && f.esc.id === S.esc.id ? "background:var(--accent-soft)" : null },
+        el("td", { class: "txt" }, f.nome), el("td", { class: "num" }, fmt(x.t2.secoes)), el("td", { class: "num" }, pct(p1)), el("td", { class: "num" }, pct(p2)),
+        el("td", { class: "num" }, pp(p2 - p1)), el("td", { class: "num" }, pct(x.t2.vv ? x.t2.A / x.t2.vv : NaN))));
+    }
+    t.append(tb);
+
+    // fechamento às 19h
+    const f19 = BU.fechamento_19h, c19 = $("#bu-19h"); c19.textContent = "";
+    if (f19 && f19.secoes > 100) {
+      const g = f19.grupos, pc = (x) => g[x].At2 / g[x].vvt2 - g[x].At1 / g[x].vvt1, cp = (x) => g[x].compt2 / g[x].aptost2 - g[x].compt1 / g[x].aptost1;
+      c19.append(el("h3", {}, `${fmt(f19.secoes)} seções fecharam às 19h no 2º turno`),
+        el("p", { class: "small" }, `No 1º turno, o fim da votação se espalhou ao longo da noite, conforme o tamanho das filas. No 2º turno, quase todas as seções fecharam logo depois das 17h, mas ${fmt(f19.secoes)} fecharam entre 19h e 19h10 (hora de Brasília), concentradas em ${f19.cidades.slice(0, 5).map((c) => titulo(c[1]) + " (" + fmt(c[2]) + ")").join(", ")}. `,
+          "Um horário tão concentrado sugere uma decisão administrativa, como a prorrogação da votação nesses locais, e vale perguntar ao TSE ou aos TREs o motivo. ",
+          el("b", {}, "O voto nessas seções não destoa: "),
+          `${CAND[A].nome} cresceu ${pp(pc("pico"))} nelas e ${pp(pc("resto"))} nas demais seções das mesmas cidades; o comparecimento variou ${pp(cp("pico"))} e ${pp(cp("resto"))}`.replace(/\.?$/, ".")));
+    }
+
+    // alertas
+    const sel = $("#sel-alerta");
+    if (!sel.options.length) {
+      for (const [k, [rot]] of Object.entries(ALERTAS)) sel.append(el("option", { value: k }, `${rot} (${fmt(BU.alertas_total[k] || 0)})`));
+      sel.value = BU.alertas_total.unanime ? "unanime" : sel.options[0].value;
+      sel.onchange = () => renderBU();
+    }
+    const tipo = sel.value, lista = (BU.alertas[tipo] || []).filter((a) => dentroDoEscopo(a.uf, a.nm));
+    const total = BU.alertas_total[tipo] || 0, cap = (BU.alertas[tipo] || []).length;
+    $("#alerta-desc").textContent = `${ALERTAS[tipo][1]} ${total ? `No país: ${fmt(total)}.` : "Nenhum caso no país."}${cap < total ? ` A lista mostra os ${fmt(cap)} casos mais fortes; a lista completa está no arquivo data/bu/alertas.csv do repositório.` : ""}`;
+    const ta = $("#tab-alertas"); ta.textContent = "";
+    ta.append(el("thead", {}, el("tr", {}, ["Município", "UF", "Zona", "Seção", "Turno", "Aptos", "Votaram", "O que aconteceu"].map((c, i) => el("th", { class: i < 2 || i === 7 ? "txt" : "" }, c)))));
+    const tba = el("tbody");
+    for (const a of lista.slice(0, 200)) {
+      const m = munDoBU(a.uf, a.nm);
+      tba.append(el("tr", { onclick: m ? () => irPara({ tipo: "mun", id: m.id }) : null },
+        el("td", { class: "txt" }, titulo(a.nm)), el("td", { class: "txt" }, a.uf), el("td", { class: "num" }, a.zona), el("td", { class: "num" }, a.secao),
+        el("td", { class: "num" }, a.turno + "º"), el("td", { class: "num" }, fmt(a.aptos)), el("td", { class: "num" }, fmt(a.comp)), el("td", { class: "txt", style: "white-space:normal;min-width:16rem" }, a.detalhe)));
+    }
+    if (!lista.length) tba.append(el("tr", {}, el("td", { colspan: 8, class: "txt muted" }, total ? "Nenhum caso neste local." : "Nenhum caso no país.")));
+    ta.append(tba);
+  }
+
   // ---------- tabela completa ----------
   function renderTabela() {
     $("#tabela").hidden = false;
@@ -792,11 +925,13 @@
   // ---------- início ----------
   async function iniciar() {
     try {
-      const [p, g] = await Promise.all([
+      const [p, g, bu] = await Promise.all([
         fetch("dados/painel.json").then((r) => { if (!r.ok) throw new Error("painel.json: " + r.status); return r.json(); }),
         fetch("dados/mapa.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        fetch("dados/bu.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
       ]);
       preparar(p); MAPA = g; prepararMapa();
+      BU = bu; for (const m of MUN) POR_NOME.set(`${m.uf}|${m.nm}`, m);
       montarFiltros(); notas(); lerHash();
       $("#carregando").hidden = true; $("#glossario").hidden = false;
       render();

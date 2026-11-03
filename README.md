@@ -45,10 +45,27 @@ Source: GitHub Actions** e rode o workflow pela aba *Actions*.
 | `data/presidente_2026.json` | Resultados por município, UF e Brasil, dos dois turnos, baixados de `resultados.tse.jus.br` (a API pública do site e do aplicativo oficial do TSE). |
 | `data/raw/` | Arquivos de configuração do TSE (lista de eleições e de municípios) e exemplos dos arquivos brutos. |
 | `web/dados/mapa.json` | Malha municipal do IBGE (cópia em github.com/tbrugz/geodata-br), simplificada por `scripts/build_geo.py` sem abrir buracos entre vizinhos. |
-| `web/dados/` | Versões compactas para o painel, geradas por `scripts/build_web.py`. |
+| `data/bu/secoes_<turno>_<UF>.csv.gz` | Boletins de urna de Presidente, uma linha por seção: aptos, comparecimento, abstenção, eleitores liberados sem a digital, tipo e número da urna, horários e votos. Fonte: dadosabertos.tse.jus.br (conjunto "Boletim de Urna"), coletados por `scripts/fetch_bu.py`. |
+| `data/bu/alertas.csv` | Lista completa das seções que chamam atenção, gerada por `scripts/analise_bu.py`. |
+| `web/dados/` | Versões compactas para o painel, geradas por `scripts/build_web.py` e `scripts/analise_bu.py`. |
 
 O script `scripts/build_web.py` confere se a soma dos municípios bate com o total
 oficial do Brasil e de cada UF e mostra qualquer diferença no log.
+
+## Boletins de urna
+
+O workflow **Boletins de urna (TSE)** (`.github/workflows/bu.yml`) baixa os
+boletins de urna de todas as seções nos dois turnos e roda
+`scripts/analise_bu.py`, que:
+
+- confere cada boletim (comparecimento + abstenção = aptos, votos =
+  comparecimento, liberados sem digital ≤ votantes) e confirma que a soma das
+  seções é igual ao resultado oficial de cada município;
+- mede a liberação sem digital por seção, município e estado, e testa se ela
+  anda junto com o voto (seções da mesma cidade e a mesma seção entre turnos);
+- lista padrões raros: 100% dos votos para um candidato, comparecimento de
+  100%, horários fora do comum (na hora de Brasília), urna repetida e seções
+  que aparecem em um turno só.
 
 ## Atualizar
 
