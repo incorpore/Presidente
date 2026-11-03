@@ -1,0 +1,46 @@
+name: Boletins de urna (TSE)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ufs:
+        description: "UFs separadas por vírgula (vazio = todas)"
+        required: false
+        default: ""
+  push:
+    paths:
+      - "scripts/fetch_bu.py"
+      - ".github/workflows/bu.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bu-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Boletins de urna de Presidente, por seção
+        run: python3 scripts/fetch_bu.py --ano 2026 --ufs "${{ github.event.inputs.ufs }}"
+
+      - name: Gravar no repositório
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f data/bu/_tmp_*
+          git add data/bu || true
+          git diff --cached --quiet && { echo "sem mudanças"; exit 0; }
+          git commit -m "dados: boletins de urna de Presidente por seção (TSE)"
+          git pull --rebase -X theirs || true
+          git push
